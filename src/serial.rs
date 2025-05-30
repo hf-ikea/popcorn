@@ -1,6 +1,6 @@
-use uart_16550::SerialPort;
-use spin::Mutex;
 use lazy_static::lazy_static;
+use spin::Mutex;
+use uart_16550::SerialPort;
 
 lazy_static! {
     pub static ref SERIAL1: Mutex<SerialPort> = {
@@ -13,7 +13,14 @@ lazy_static! {
 #[doc(hidden)]
 pub fn _print(args: ::core::fmt::Arguments) {
     use core::fmt::Write;
-    SERIAL1.lock().write_fmt(args).expect("Serial printing failed...");
+    use x86_64::instructions::interrupts;
+    interrupts::without_interrupts(|| {
+        // same issue here, check vga_buffer::_print(...) for more details
+        SERIAL1
+            .lock()
+            .write_fmt(args)
+            .expect("Serial printing failed...");
+    });
 }
 
 #[macro_export]

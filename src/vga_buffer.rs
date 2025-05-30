@@ -1,8 +1,6 @@
-use core::{fmt, ptr};
-
-use spin::Mutex;
-use volatile::Volatile;
+use core::{fmt, mem::MaybeUninit, ptr};
 use lazy_static::lazy_static;
+use spin::Mutex;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,13 +46,23 @@ const BUFFER_WIDTH: usize = 80;
 
 #[repr(transparent)]
 struct Buffer {
-    chars: [[Volatile<ScreenChar>; BUFFER_WIDTH]; BUFFER_HEIGHT],
+    chars: [[MaybeUninit<ScreenChar>; BUFFER_WIDTH]; BUFFER_HEIGHT],
+}
+
+// https://github.com/phil-opp/blog_os/issues/1301#issuecomment-2227451984
+impl Buffer {
+    fn write(&mut self, row: usize, col: usize, c: ScreenChar) {
+        unsafe {
+            // UNSAFE: all pointers in `chars` point to a valid ScreenChar in the VGA buffer.
+            ptr::write_volatile(&mut self.chars[row][col], MaybeUninit::new(c));
+        }
+    }
 }
 
 pub struct Writer {
     column_position: usize,
     colour_code: ColourCode,
-    buffer: &'static mut Buffer, // ref is valid for all of runtime
+    buffer: &'static mut Buffer,
 }
 
 impl Writer {
@@ -70,10 +78,14 @@ impl Writer {
                 let col = self.column_position;
 
                 let colour_code = self.colour_code;
-                self.buffer.chars[row][col].write(ScreenChar {
-                    ascii_character: byte,
-                    colour_code,
-                });
+                self.buffer.write(
+                    row,
+                    col,
+                    ScreenChar {
+                        ascii_character: byte,
+                        colour_code,
+                    },
+                );
                 self.column_position += 1;
             }
         }
@@ -82,8 +94,9 @@ impl Writer {
     fn new_line(&mut self) {
         for row in 1..BUFFER_HEIGHT {
             for col in 0..BUFFER_WIDTH {
-                let character = self.buffer.chars[row][col].read();
-                self.buffer.chars[row - 1][col].write(character);
+                let character =
+                    unsafe { ptr::read_volatile(&self.buffer.chars[row][col].assume_init()) };
+                self.buffer.write(row - 1, col, character);
             }
         }
         self.clear_row(BUFFER_HEIGHT - 1);
@@ -96,7 +109,7 @@ impl Writer {
             colour_code: self.colour_code,
         };
         for col in 0..BUFFER_WIDTH {
-            self.buffer.chars[row][col].write(blank);
+            self.buffer.write(row, col, blank);
         }
     }
 
@@ -116,7 +129,9 @@ lazy_static! {
     pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
         column_position: 0,
         colour_code: ColourCode::new(Colour::Magenta, Colour::Black),
-        buffer: unsafe { (ptr::with_exposed_provenance_mut::<Buffer>(0xb8000).as_mut()).unwrap_unchecked() },
+        buffer: unsafe {
+            (ptr::with_exposed_provenance_mut::<Buffer>(0xb8000).as_mut()).unwrap_unchecked()
+        },
     });
 }
 
@@ -126,7 +141,6 @@ impl fmt::Write for Writer {
         Ok(())
     }
 }
-
 
 #[macro_export]
 macro_rules! print {
@@ -142,5 +156,49 @@ macro_rules! println {
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
-    WRITER.lock().write_fmt(args).unwrap();
+    use x86_64::instructions::interrupts;
+    interrupts::without_interrupts(|| {
+        WRITER.lock().write_fmt(args).unwrap(); // could cause deadlock if interrupt happens here, forever spinlock
+    });
+}
+
+#[test_case]
+fn test_println_simple() {
+    println!("meow"); // if we dont panic then yay! we did it!
+}
+
+#[test_case]
+fn test_println_lots() {
+    for _ in 0..200 {
+        println!(":3");
+    }
+}
+
+#[test_case]
+fn test_println_output() {
+    use core::fmt::Write;
+    use x86_64::instructions::interrupts;
+    let s = "this is very important information";
+    interrupts::without_interrupts(|| {
+        // prevent race condition or whatever, keep writer locked for whole test
+        let mut writer = WRITER.lock();
+        writeln!(writer, "\n{}", s).expect("writeln failed");
+        // ok now verify it actually happened
+        for (i, c) in s.chars().enumerate() {
+            // counting iters in i and character in c
+            // println! appends a newline so its the one before the last line
+            let screen_char = unsafe {
+                ptr::read_volatile(&writer.buffer.chars[BUFFER_HEIGHT - 2][i].assume_init())
+            };
+            assert_eq!(char::from(screen_char.ascii_character), c); // they equal!! or panic :(
+        }
+    });
+}
+
+#[test_case]
+fn test_println_wrap() {
+    // if we panic from boundscheck then well this didnt work
+    println!(
+        "this is a very long string that should start to wrap, as it does not fit on one entire row. i will now begin my performance. *ahem* meow meow meow meow meow meow meow meow meow meow. thank you."
+    );
 }
