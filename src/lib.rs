@@ -7,27 +7,24 @@
 #![feature(type_alias_impl_trait)]
 
 use core::panic::PanicInfo;
+extern crate alloc;
 
 #[cfg(test)]
 use bootloader::{BootInfo, entry_point};
 
+pub mod allocator;
 pub mod gdt;
 pub mod interrupts;
 pub mod memory;
 pub mod serial;
 pub mod vga_buffer;
+pub mod task;
 
 pub fn init() {
     gdt::init();
     interrupts::init_idt();
     unsafe { interrupts::PICS.lock().initialize() }; // unsafe, if PIC is configured wrong may -> UB
     x86_64::instructions::interrupts::enable();
-}
-
-pub fn hlt_loop() -> ! {
-    loop {
-        x86_64::instructions::hlt();
-    }
 }
 
 #[cfg(test)]
@@ -37,6 +34,12 @@ fn test_kernel_main(_boot_info: &'static BootInfo) -> ! {
     init();
     test_main();
     hlt_loop();
+}
+
+pub fn hlt_loop() -> ! {
+    loop {
+        x86_64::instructions::hlt();
+    }
 }
 
 #[cfg(test)]
