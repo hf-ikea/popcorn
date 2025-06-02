@@ -1,0 +1,6 @@
+$ mkdir -p "/home/emi/Documents/popcorn/kernel/target/x86_64-unknown-none/debug/build/az-6de616479547036f/out/try_track_caller"
+$ cd "/home/emi/Documents/popcorn/kernel/target/x86_64-unknown-none/debug/build/az-6de616479547036f/out/try_track_caller"
+$ printf '%s' "// try_tra"... > "/home/emi/Documents/popcorn/kernel/target/x86_64-unknown-none/debug/build/az-6de616479547036f/out/try_track_caller/try_track_caller.rs"
+$ cd "/home/emi/Documents/popcorn/kernel/target/x86_64-unknown-none/debug/build/az-6de616479547036f/out/try_track_caller" && "rustc" "try_track_caller.rs" "--emit=dep-info,metadata" >& /dev/null
+cargo:rustc-cfg=track_caller
+$ rm -r "/home/emi/Documents/popcorn/kernel/target/x86_64-unknown-none/debug/build/az-6de616479547036f/out/try_track_caller"

@@ -4,6 +4,3 @@
 #build-std-features = ["compiler-builtins-mem"]
 #panic-abort-tests = true
 bindeps = true
-
-[target.'cfg(target_os = "none")']
-runner = "bootimage runner"

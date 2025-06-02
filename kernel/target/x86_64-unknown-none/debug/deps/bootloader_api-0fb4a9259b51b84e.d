@@ -1,0 +1,13 @@
+/home/emi/Documents/popcorn/kernel/target/x86_64-unknown-none/debug/deps/bootloader_api-0fb4a9259b51b84e.d: /home/emi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bootloader_api-0.11.10/src/lib.rs /home/emi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bootloader_api-0.11.10/src/config.rs /home/emi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bootloader_api-0.11.10/src/info.rs /home/emi/Documents/popcorn/kernel/target/x86_64-unknown-none/debug/build/bootloader_api-53655dbf270cec93/out/concat.rs /home/emi/Documents/popcorn/kernel/target/x86_64-unknown-none/debug/build/bootloader_api-53655dbf270cec93/out/version_info.rs
+
+/home/emi/Documents/popcorn/kernel/target/x86_64-unknown-none/debug/deps/libbootloader_api-0fb4a9259b51b84e.rlib: /home/emi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bootloader_api-0.11.10/src/lib.rs /home/emi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bootloader_api-0.11.10/src/config.rs /home/emi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bootloader_api-0.11.10/src/info.rs /home/emi/Documents/popcorn/kernel/target/x86_64-unknown-none/debug/build/bootloader_api-53655dbf270cec93/out/concat.rs /home/emi/Documents/popcorn/kernel/target/x86_64-unknown-none/debug/build/bootloader_api-53655dbf270cec93/out/version_info.rs
+
+/home/emi/Documents/popcorn/kernel/target/x86_64-unknown-none/debug/deps/libbootloader_api-0fb4a9259b51b84e.rmeta: /home/emi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bootloader_api-0.11.10/src/lib.rs /home/emi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bootloader_api-0.11.10/src/config.rs /home/emi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bootloader_api-0.11.10/src/info.rs /home/emi/Documents/popcorn/kernel/target/x86_64-unknown-none/debug/build/bootloader_api-53655dbf270cec93/out/concat.rs /home/emi/Documents/popcorn/kernel/target/x86_64-unknown-none/debug/build/bootloader_api-53655dbf270cec93/out/version_info.rs
+
+/home/emi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bootloader_api-0.11.10/src/lib.rs:
+/home/emi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bootloader_api-0.11.10/src/config.rs:
+/home/emi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bootloader_api-0.11.10/src/info.rs:
+/home/emi/Documents/popcorn/kernel/target/x86_64-unknown-none/debug/build/bootloader_api-53655dbf270cec93/out/concat.rs:
+/home/emi/Documents/popcorn/kernel/target/x86_64-unknown-none/debug/build/bootloader_api-53655dbf270cec93/out/version_info.rs:
+
+# env-dep:OUT_DIR=/home/emi/Documents/popcorn/kernel/target/x86_64-unknown-none/debug/build/bootloader_api-53655dbf270cec93/out

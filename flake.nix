@@ -23,6 +23,8 @@
         pkgs.qemu
         pkgs.nasm
         pkgs.grub2
+        pkgs.libisoburn
+        pkgs.gptfdisk
       ];
 
       RUST_SRC_PATH = "${toolchain}/lib/rustlib/src/rust/library";

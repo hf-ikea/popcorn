@@ -1,57 +1,61 @@
 #![no_std]
 #![no_main]
-#![feature(custom_test_frameworks)]
-#![test_runner(kernel::test_runner)]
-#![reexport_test_harness_main = "test_main"]
 
-use bootloader_api::{BootInfo, entry_point};
-use core::panic::PanicInfo;
-use kernel::{
-    allocator,
-    memory::{self, BootInfoFrameAllocator},
-    task::{Task, executor::Executor, keyboard},
-};
-use x86_64::VirtAddr;
+use core::arch::asm;
 
-extern crate alloc;
+use limine::BaseRevision;
+use limine::request::{FramebufferRequest, RequestsEndMarker, RequestsStartMarker};
 
-mod framebuffer;
-mod serial;
+/// Sets the base revision to the latest supported by the `limine` crate
+#[used] // so the compiler doesnt try to remove, direct request to limine
+#[unsafe(link_section = ".requests")]
+pub static BASE_REVISION: BaseRevision = BaseRevision::new();
 
-entry_point!(kernel_main, config = &kernel::BOOTLOADER_CONFIG);
-fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
-    kernel::init();
-    let frame_buffer_struct = (&mut boot_info.framebuffer).as_mut().unwrap();
-    let frame_buffer_info = frame_buffer_struct.info().clone();
-    unsafe { kernel::init_logger(frame_buffer_struct.buffer_mut(), frame_buffer_info) };
-    let phys_mem_offset =
-        VirtAddr::new(boot_info.physical_memory_offset.into_option().expect("msg"));
-    let mut mapper = unsafe { memory::init(phys_mem_offset) };
-    let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_regions) };
-    allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap init failed :(");
+#[used]
+#[unsafe(link_section = ".requests")]
+static FRAMEBUFFER_REQUEST: FramebufferRequest = FramebufferRequest::new();
 
-    #[cfg(test)]
-    test_main();
+#[used]
+#[unsafe(link_section = ".requests_start_marker")]
+static _START_MARKER: RequestsStartMarker = RequestsStartMarker::new();
+#[used]
+#[unsafe(link_section = ".requests_end_marker")]
+static _END_MARKER: RequestsEndMarker = RequestsEndMarker::new();
 
-    let mut executor = Executor::new();
-    executor.spawn(Task::new(keyboard::handle_keypresses()));
-    executor.run();
+#[unsafe(no_mangle)]
+unsafe extern "C" fn kernel_main() -> ! {
+    // our limine requets must be referenced in a called function, otherwise the linker may remove them
+    assert!(BASE_REVISION.is_supported());
+
+    if let Some(framebuffer_response) = FRAMEBUFFER_REQUEST.get_response() {
+        if let Some(framebuffer) = framebuffer_response.framebuffers().next() {
+            for i in 0..100u64 {
+                let pixel_offset = i * framebuffer.pitch() + i * 4;
+
+                unsafe {
+                    framebuffer.addr().add(pixel_offset as usize).cast::<u32>().write(0xFFFFFFFF);
+                }
+            };
+        }
+    }
+
+    hcf();
 }
 
-#[cfg(not(test))]
 #[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
-    log::error!("!!!KERNEL PANIC!!!\n{}", info); // those who panic
-    kernel::hlt_loop();
+fn rust_panic(_info: &core::panic::PanicInfo) -> ! {
+    hcf();
 }
 
-#[cfg(test)]
-#[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
-    kernel::test_panic_handler(info);
-}
-
-#[test_case]
-fn trivial_assertion() {
-    assert_eq!(1, 1);
+fn hcf() -> ! {
+    loop {
+        unsafe {
+            #[cfg(target_arch = "x86_64")]
+            asm!("hlt");
+            #[cfg(any(target_arch = "aarch64", target_arch = "riscv64"))]
+            asm!("wfi");
+            #[cfg(target_arch = "loongarch64")]
+            asm!("idle 0");
+        }
+    }
 }
