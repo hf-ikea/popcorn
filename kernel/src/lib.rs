@@ -9,16 +9,34 @@
 use core::panic::PanicInfo;
 extern crate alloc;
 
+use bootloader_api::{config::Mapping, info::FrameBufferInfo, BootloaderConfig};
 #[cfg(test)]
-use bootloader::{BootInfo, entry_point};
+use bootloader_api::{BootInfo, entry_point};
+use bootloader_x86_64_common::logger::LockedLogger;
+use conquer_once::spin::OnceCell;
 
 pub mod allocator;
 pub mod gdt;
 pub mod interrupts;
 pub mod memory;
 pub mod serial;
-pub mod vga_buffer;
 pub mod task;
+
+pub static BOOTLOADER_CONFIG: BootloaderConfig = {
+    let mut config = BootloaderConfig::new_default();
+    config.mappings.physical_memory = Some(Mapping::Dynamic);
+    config
+};
+
+pub(crate) static LOGGER: OnceCell<LockedLogger> = OnceCell::uninit();
+
+/// This function is marked unsafe because the caller must ensure that it is only called once.
+pub unsafe fn init_logger(buffer: &'static mut [u8], info: FrameBufferInfo) {
+    let logger = LOGGER.get_or_init(move || LockedLogger::new(buffer, info, true, false));
+    log::set_logger(logger).expect("Logger already set");
+    log::set_max_level(log::LevelFilter::Trace);
+    log::info!("logger initalized");
+}
 
 pub fn init() {
     gdt::init();
@@ -28,9 +46,9 @@ pub fn init() {
 }
 
 #[cfg(test)]
-entry_point!(test_kernel_main);
+entry_point!(test_kernel_main, config = &BOOTLOADER_CONFIG);
 #[cfg(test)]
-fn test_kernel_main(_boot_info: &'static BootInfo) -> ! {
+fn test_kernel_main(_boot_info: &'static mut BootInfo) -> ! {
     init();
     test_main();
     hlt_loop();

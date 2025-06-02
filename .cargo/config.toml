@@ -1,11 +1,9 @@
-#[unstable]
+[unstable]
 # cross compile core library for custom target
 #build-std = ["core", "compiler_builtins", "alloc"]
 #build-std-features = ["compiler-builtins-mem"]
 #panic-abort-tests = true
-
-#[build]
-#target = "x86_64-unknown-none"
+bindeps = true
 
 [target.'cfg(target_os = "none")']
 runner = "bootimage runner"
