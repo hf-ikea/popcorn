@@ -25,6 +25,7 @@
         pkgs.grub2
         pkgs.libisoburn
         pkgs.gptfdisk
+        pkgs.gdb
       ];
 
       RUST_SRC_PATH = "${toolchain}/lib/rustlib/src/rust/library";

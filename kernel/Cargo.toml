@@ -5,32 +5,9 @@ edition = "2024"
 
 [dependencies]
 limine = "0.4"
-bootloader_api = "0.11.10"
-bootloader-x86_64-common = "0.11.3"
-spin = "0.10.0"
-x86_64 = "0.15.2"
-uart_16550 = "0.3.2"
-pic8259 = "0.11.0"
-pc-keyboard = "0.8.0"
-linked_list_allocator = "0.10.5"
-lazy_static = { version = "1.0", features = ["spin_no_std"] }
-crossbeam-queue = { version = "0.3.11", default-features = false, features = [
-    "alloc",
-] }
-conquer-once = { version = "0.4.0", default-features = false }
-futures-util = { version = "0.3.31", default-features = false, features = [
-    "alloc",
-] }
 embedded-graphics = "0.8.1"
 log = { version = "0.4.17", default-features = false }
-
-[[bin]]
-name = "popcorn"
-test = false
-bench = false
-
-[profile.dev]
-panic = "abort"
-
-[profile.release]
-panic = "abort"
+spin = "0.10.0"
+noto-sans-mono-bitmap = "0.3.1"
+conquer-once = { version = "0.4.0", default-features = false }
+lazy_static = { version = "1.5.0", default-features = false, features = [ "spin_no_std" ] }

@@ -2,46 +2,34 @@
 #![no_main]
 
 use core::arch::asm;
-
-use limine::BaseRevision;
-use limine::request::{FramebufferRequest, RequestsEndMarker, RequestsStartMarker};
-
-/// Sets the base revision to the latest supported by the `limine` crate
-#[used] // so the compiler doesnt try to remove, direct request to limine
-#[unsafe(link_section = ".requests")]
-pub static BASE_REVISION: BaseRevision = BaseRevision::new();
-
-#[used]
-#[unsafe(link_section = ".requests")]
-static FRAMEBUFFER_REQUEST: FramebufferRequest = FramebufferRequest::new();
-
-#[used]
-#[unsafe(link_section = ".requests_start_marker")]
-static _START_MARKER: RequestsStartMarker = RequestsStartMarker::new();
-#[used]
-#[unsafe(link_section = ".requests_end_marker")]
-static _END_MARKER: RequestsEndMarker = RequestsEndMarker::new();
+use popcorn::{init_logger, memory::{self, offset}, request::{BASE_REVISION, RSDP_REQUEST}};
 
 #[unsafe(no_mangle)]
-unsafe extern "C" fn kernel_main() -> ! {
-    // our limine requets must be referenced in a called function, otherwise the linker may remove them
+unsafe extern "C" fn kmain() -> ! {
+    // All limine requests must also be referenced in a called function, otherwise they may be
+    // removed by the linker.
     assert!(BASE_REVISION.is_supported());
 
-    if let Some(framebuffer_response) = FRAMEBUFFER_REQUEST.get_response() {
-        if let Some(framebuffer) = framebuffer_response.framebuffers().next() {
-            for i in 0..100u64 {
-                let pixel_offset = i * framebuffer.pitch() + i * 4;
-
-                unsafe {
-                    framebuffer.addr().add(pixel_offset as usize).cast::<u32>().write(0xFFFFFFFF);
-                }
-            };
-        }
+    unsafe {
+        init_logger();
+        memory::init();
     }
+
+    if let Some(rsdp_response) = RSDP_REQUEST.get_response() {
+        let addr = rsdp_response.address();
+        log::info!("RSDP at addr: {:x}", addr);
+        //let rsdp = ptr::with_exposed_provenance::<u8>(addr); //unsafe { popcorn::rsdp::RSDP::new(address) };
+        //log::info!("{}", rsdp.read());
+    }
+
+    // for i in 0..42 {
+    //     log::debug!("{}", i);
+    // }
 
     hcf();
 }
 
+#[cfg(not(test))]
 #[panic_handler]
 fn rust_panic(_info: &core::panic::PanicInfo) -> ! {
     hcf();
