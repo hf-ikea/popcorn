@@ -9,6 +9,7 @@ pub mod framebuffer;
 pub mod rsdp;
 pub mod request;
 pub mod memory;
+pub mod allocator;
 
 pub(crate) static LOGGER: OnceCell<LockedLogger> = OnceCell::uninit();
 

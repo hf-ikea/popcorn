@@ -2,17 +2,19 @@
 #![no_main]
 
 use core::arch::asm;
-use popcorn::{init_logger, memory::{self, offset}, request::{BASE_REVISION, RSDP_REQUEST}};
+use popcorn::{allocator, init_logger, memory::{self, offset}, request::{BASE_REVISION, RSDP_REQUEST}};
 
 #[unsafe(no_mangle)]
 unsafe extern "C" fn kmain() -> ! {
     // All limine requests must also be referenced in a called function, otherwise they may be
     // removed by the linker.
     assert!(BASE_REVISION.is_supported());
-
+    
     unsafe {
         init_logger();
         memory::init();
+        let mut frame_allocator = BumpFrameAllocator::init(&boot_info.memory_regions);
+        let level_4_table = allocator::init_heap(frame_allocator);
     }
 
     if let Some(rsdp_response) = RSDP_REQUEST.get_response() {
