@@ -5,11 +5,11 @@ use conquer_once::spin::OnceCell;
 
 use crate::{framebuffer::LockedLogger, request::FRAMEBUFFER_REQUEST};
 
-pub mod framebuffer;
-pub mod rsdp;
-pub mod request;
-pub mod memory;
 pub mod allocator;
+pub mod framebuffer;
+pub mod memory;
+pub mod request;
+pub mod rsdp;
 
 pub(crate) static LOGGER: OnceCell<LockedLogger> = OnceCell::uninit();
 
@@ -26,3 +26,28 @@ pub unsafe fn init_logger() {
     log::set_max_level(log::LevelFilter::Trace);
     log::info!("Logger initalized!");
 }
+
+/// rsci
+macro_rules! bitflag_bits {
+    {
+        $( #[$attr:meta] )*
+        $v:vis struct $name:ident: $t:ident bits: {
+            $(
+                $( #[doc = $doc:literal] )*
+                $bit_name:ident: $bit:expr
+            ),+ $(,)?
+        }
+    } => {
+        ::bitflags::bitflags! {
+            $(#[$attr])*
+            $v struct $name: $t {
+                $(
+                    $( #[doc = $doc] )*
+                    const $bit_name = 1 << $bit);+
+                ;
+            }
+        }
+    }
+}
+
+pub(crate) use bitflag_bits;

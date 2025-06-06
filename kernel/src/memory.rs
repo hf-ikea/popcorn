@@ -1,12 +1,11 @@
 use core::{
     arch::asm,
     marker::PhantomData,
-    ops::{Add, AddAssign, Index, IndexMut, Sub},
+    ops::{Add, Index, IndexMut, Sub},
     panic, ptr, u64,
 };
 
-use crate::request::{HHDM_REQUEST, MEMORY_MAP_REQUEST};
-use bitflags::bitflags;
+use crate::{bitflag_bits, request::HHDM_REQUEST};
 use limine::{memory_map::EntryType, response::MemoryMapResponse};
 
 lazy_static::lazy_static! {
@@ -15,18 +14,6 @@ lazy_static::lazy_static! {
 
 pub unsafe fn init() {
     log::debug!("HHDM Offset: 0x{:x}", *HHDM_OFFSET);
-    if let Some(memory_map_request) = MEMORY_MAP_REQUEST.get_response() {
-        //let _ = get_active_table();
-
-        //log::info!("level 4 table first entry 0x{:x}", value.iter().filter(|v| v.get_flags()).next().unwrap().get_phys());
-        for entry in memory_map_request
-            .entries()
-            .iter()
-            .filter(|entry| entry.entry_type == limine::memory_map::EntryType::USABLE)
-        {
-            log::debug!("0x{:x}, length {} bytes", entry.base, entry.length);
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -164,12 +151,17 @@ impl PageSize for Size1GiB {
     const STR: &'static str = "1GiB";
 }
 
-#[derive(Clone, Copy)]
 #[repr(C)]
 pub struct Page<S: PageSize = Size4KiB> {
     start_addr: VirtAddr,
     size: PhantomData<S>,
 }
+impl<T: PageSize> Clone for Page<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+impl<T: PageSize> Copy for Page<T> {}
 
 impl<S: PageSize> Page<S> {
     pub const SIZE: u64 = S::SIZE;
@@ -220,7 +212,7 @@ impl<S: PageSize> Iterator for PageRangeInclusive<S> {
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         if self.start.start_addr.as_u64() <= self.end.start_addr.as_u64() {
-            let page = Page::containing_address(self.start.start_addr);
+            let page = self.start;
             let max_page_addr = u64::MAX - (S::SIZE - 1);
             if self.start.start_addr.as_u64() < max_page_addr {
                 self.start = self.start + 1;
@@ -322,22 +314,23 @@ impl From<PageOffset> for u64 {
     }
 }
 
-bitflags! {
+bitflag_bits! {
     #[derive(Debug, Clone, Copy)]
-    pub struct PageTableFlags: u64 {
-        const PRESENT    = (1 << 0);
-        const WRITABLE   = (1 << 1);
+    #[repr(transparent)]
+    pub struct PageTableFlags: u64 bits:{
+        PRESENT: 0,
+        WRITABLE: 1,
         /// Controls if accesses from userspace are allowed
-        const USER_MODE  = (1 << 2);
-        const WRITE_THRU = (1 << 3);
-        const NO_CACHE   = (1 << 4);
+        USER_MODE: 2,
+        WRITE_THRU: 3,
+        NO_CACHE: 4,
         /// Set by CPU when mapped frame or table is accessed
-        const ACCESSED   = (1 << 5);
+        ACCESSED: 5,
         /// Set by CPU on write to mapped frame
-        const DIRTY      = (1 << 6);
-        const HUGE       = (1 << 7);
-        const GLOBAL     = (1 << 8);
-        const NO_EXECUTE = (1 << 63);
+        DIRTY: 6,
+        HUGE: 7,
+        GLOBAL: 8,
+        NO_EXECUTE: 63,
     }
 }
 
@@ -356,9 +349,10 @@ pub struct PageTable {
 
 impl PageTable {
     #[inline]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
+        //let empty =;
         Self {
-            entries: [PageTableEntry::new(); PAGE_TABLE_ENTRY_COUNT],
+            entries: [const { PageTableEntry(0) }; PAGE_TABLE_ENTRY_COUNT],
         }
     }
 
@@ -414,7 +408,7 @@ impl IndexMut<PageTableIndex> for PageTable {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, PartialEq)]
 #[repr(transparent)]
 pub struct PageTableEntry(u64);
 
@@ -427,9 +421,11 @@ impl PageTableEntry {
     #[inline]
     pub fn get_table(&self) -> Option<&'static mut PageTable> {
         if !self.get_flags().contains(PageTableFlags::PRESENT) {
+            log::debug!("table not present!");
             return None;
         }
         Some(unsafe {
+            //log::debug!("getting table at addr 0x{:x}", offset(self.get_phys()));
             &mut *ptr::with_exposed_provenance_mut::<PageTable>(
                 offset(self.get_phys()).try_into().unwrap(),
             )
@@ -438,7 +434,7 @@ impl PageTableEntry {
 
     #[inline]
     pub fn get_phys(&self) -> u64 {
-        self.0 & 0x000f_ffff_ffff_f000 << 12
+        self.0 & 0x000f_ffff_ffff_f000
     }
 
     #[inline]
@@ -459,7 +455,7 @@ impl PageTableEntry {
     }
 
     pub fn set_flags(&mut self, flags: PageTableFlags) -> &mut Self {
-        self.0 | flags.as_u64();
+        self.0 = self.0 | flags.as_u64();
         self
     }
 
@@ -473,42 +469,60 @@ impl PageTableEntry {
         self.0 == 0
     }
 
-    #[inline]
-    fn get_bit(&self, n: u8) -> bool {
-        self.0 & (1 << n) != 0
-    }
+    // #[inline]
+    // fn get_bit(&self, n: u8) -> bool {
+    //     self.0 & (1 << n) != 0
+    // }
 
-    #[inline]
-    fn set_bit(&mut self, n: u8, val: bool) -> &mut Self {
-        if val {
-            self.0 &= !(1 << n)
-        } else {
-            self.0 |= 1 << n
-        }
-        self
-    }
+    // #[inline]
+    // fn set_bit(&mut self, n: u8, val: bool) -> &mut Self {
+    //     if val {
+    //         self.0 &= !(1 << n)
+    //     } else {
+    //         self.0 |= 1 << n
+    //     }
+    //     self
+    // }
 }
 
 pub fn translate(level_4_table: &mut PageTable, virt: VirtAddr) -> Option<PhysAddr> {
-    let p4 = level_4_table[virt.p4_index()];
-    if p4.get_flags().contains(PageTableFlags::HUGE) {
-        panic!("huge page on level 4")
+    log::debug!("translate virtaddr 0x{:x}", virt.as_u64());
+    log::debug!("p4 idx: {}", virt.p4_index().as_u64());
+    log::debug!("p3 idx: {}", virt.p3_index().as_u64());
+    log::debug!("p2 idx: {}", virt.p2_index().as_u64());
+    log::debug!("p1 idx: {}", virt.p1_index().as_u64());
+    log::debug!("page offset: {}", virt.page_offset().0);
+
+    let p4_entry = &level_4_table[virt.p4_index()];
+    if p4_entry.get_flags().contains(PageTableFlags::HUGE) {
+        panic!("level 4 entry has huge page bit set (invalid!)")
     }
-    let p3 = p4.get_table()?[virt.p3_index()];
-    if p3.get_flags().contains(PageTableFlags::HUGE) {
+    log::debug!("level 4 entry got!, {:x}", p4_entry.get_phys());
+
+    let p3_table = &p4_entry.get_table().unwrap()[virt.p3_index()];
+    if p3_table.get_flags().contains(PageTableFlags::HUGE) {
         todo!("huge paging")
     }
-    let p2 = p3.get_table()?[virt.p2_index()];
-    if p3.get_flags().contains(PageTableFlags::HUGE) {
+    log::debug!("level 3 entry got!, {:x}", p3_table.get_phys());
+
+    let p2_table = &p3_table.get_table().unwrap()[virt.p2_index()];
+    if p2_table.get_flags().contains(PageTableFlags::HUGE) {
         todo!("huge paging")
     }
-    let p1 = p2.get_table()?[virt.p1_index()];
-    if p1.get_flags().contains(PageTableFlags::HUGE) {
-        panic!("huge page on level 1")
-    }
-    if p1.get_flags().contains(PageTableFlags::PRESENT) {
-        Some(PhysAddr::new(p1.get_phys() | u64::from(virt.page_offset())))
+    log::debug!("level 2 entry got!, {:x}", p2_table.get_phys());
+
+    let p1_entry = &p2_table.get_table().unwrap()[virt.p1_index()];
+
+    log::debug!("level 1 entry got!, {:x}", p1_entry.get_phys());
+    log::debug!("p1 has bitflags 0b{:b}", p1_entry.get_flags());
+
+    if p1_entry.get_flags().contains(PageTableFlags::PRESENT) {
+        log::debug!("present");
+        Some(PhysAddr::new(
+            p1_entry.get_phys() | u64::from(virt.page_offset()),
+        ))
     } else {
+        log::debug!("nop");
         None
     }
 }
@@ -520,30 +534,30 @@ pub fn map_to_4kib(
     flags: PageTableFlags,
     parent_table_flags: PageTableFlags,
     frame_allocator: &mut impl FrameAllocator<Size4KiB>,
-) -> PageTableEntry {
-    let p3 = create_next_table(
+) {
+    let p3_table = create_next_table(
         &mut level_4_table[page.start_addr().p4_index()],
         parent_table_flags,
         frame_allocator,
     );
-    let p2 = create_next_table(
-        &mut p3[page.start_addr().p3_index()],
+    let p2_table = create_next_table(
+        &mut p3_table[page.start_addr().p3_index()],
         parent_table_flags,
         frame_allocator,
     );
-    let p1 = create_next_table(
-        &mut p2[page.start_addr().p2_index()],
+    let p1_table = create_next_table(
+        &mut p2_table[page.start_addr().p2_index()],
         parent_table_flags,
         frame_allocator,
     );
 
-    if !p1[page.start_addr().p1_index()].is_unused() {
+    if !p1_table[page.start_addr().p1_index()].is_unused() {
         panic!("page already mapped")
     }
-    let mut entry = p1[page.start_addr().p1_index()];
+
+    let entry = &mut p1_table[page.start_addr().p1_index()];  // im so STUPID it was copying it without the reference !
     entry.set_frame(frame, flags);
-    unsafe { asm!("invlpg [{}]", in(reg) page.start_addr().as_u64(), options(preserves_flags)) }
-    entry
+    unsafe { asm!("invlpg [{}]", in(reg) page.start_addr().as_u64(), options(preserves_flags)) };
 }
 
 fn create_next_table(
@@ -568,6 +582,7 @@ fn create_next_table(
 
     let page_table = entry.get_table().unwrap();
     if created {
+        log::debug!("creating table at 0x{:x}", entry.get_phys());
         page_table.zero();
     }
     page_table
@@ -578,6 +593,7 @@ pub fn get_active_table() -> &'static mut PageTable {
     let value: u64;
     unsafe { asm!("mov {}, cr3", out(reg) value, options(preserves_flags)) }
     let addr: u64 = value & 0x000f_ffff_ffff_f000;
+    log::debug!("{:x}", addr);
     unsafe { &mut *ptr::with_exposed_provenance_mut::<PageTable>(offset(addr).try_into().unwrap()) }
 }
 
@@ -603,7 +619,7 @@ impl BumpFrameAllocator {
     pub unsafe fn init(memory_map: &'static MemoryMapResponse) -> Self {
         BumpFrameAllocator {
             memory_map,
-            cur_region: 0,
+            cur_region: 8,
             next_addr: 0,
         }
     }
@@ -626,7 +642,6 @@ unsafe impl FrameAllocator<Size4KiB> for BumpFrameAllocator {
             let frame = Some(Frame::<Size4KiB>::containing_address(PhysAddr::new(
                 self.next_addr,
             )));
-
             self.next_addr += 4096;
 
             return frame;

@@ -24,6 +24,7 @@ pub struct XSDP {
 
 impl RSDP {
     pub unsafe fn new(addr: usize) -> Self {
+        log::debug!("RSDP at addr 0x{:x}", addr);
         unsafe { ptr::read(ptr::with_exposed_provenance::<RSDP>(addr)) }
     }
 

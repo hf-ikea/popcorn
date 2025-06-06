@@ -2,9 +2,9 @@ use core::alloc::{GlobalAlloc, Layout};
 use core::ptr::null_mut;
 use fixed_size_block::FixedSizeBlockAllocator;
 
-use crate::memory::{map_to_4kib, FrameAllocator, Page, PageTable, Size4KiB, VirtAddr};
+use crate::memory::{map_to_4kib, translate, FrameAllocator, Page, PageTable, Size4KiB, VirtAddr};
 use crate::memory::{PageTableFlags, get_active_table};
-pub const HEAP_START: usize = 0x_4444_4444_0000;
+pub const HEAP_START: usize = 0x_4444_4444_0000 + 0xffff800000000000;
 pub const HEAP_SIZE: usize = 100 * 1024; // 100 KiB
 
 pub mod fixed_size_block;
@@ -13,7 +13,9 @@ pub mod fixed_size_block;
 static ALLOCATOR: Locked<FixedSizeBlockAllocator> = Locked::new(FixedSizeBlockAllocator::new());
 
 pub fn init_heap(frame_allocator: &mut impl FrameAllocator<Size4KiB>) -> &'static mut PageTable {
+    log::debug!("Starting heap init..");
     let level_4_table = get_active_table();
+    log::debug!("Got level 4 table");
     let page_range = {
         let heap_start = VirtAddr::new(HEAP_START as u64);
         let heap_end = heap_start + HEAP_SIZE.try_into().unwrap() - 1u64;
@@ -21,12 +23,17 @@ pub fn init_heap(frame_allocator: &mut impl FrameAllocator<Size4KiB>) -> &'stati
         let heap_end_page = Page::containing_address(heap_end);
         Page::range_inclusive(heap_start_page, heap_end_page)
     };
-
+    log::debug!("Got page range, start: 0x{:x}, end: 0x{:x}", page_range.start.start_addr().as_u64(), page_range.end.start_addr().as_u64());
+    let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
     for page in page_range {
         let frame = frame_allocator.allocate_frame().unwrap();
-        let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
-        map_to_4kib(level_4_table, page, frame, flags, flags, frame_allocator);
+        let entry = map_to_4kib(level_4_table, page, frame, flags, flags, frame_allocator);
+        //log::debug!("{:x}", entry.get_phys());
     }
+
+    log::debug!("0x{:x}", translate(level_4_table, VirtAddr::new(HEAP_START.try_into().unwrap())).unwrap().as_u64());
+
+    log::debug!("Done mapping");
 
     unsafe { ALLOCATOR.lock().init(HEAP_START, HEAP_SIZE) };
 

@@ -33,12 +33,13 @@ impl FixedSizeBlockAllocator {
     /// heap bounds are valid, and the heap is unused. Must only be called once.
     pub unsafe fn init(&mut self, heap_start: usize, heap_size: usize) {
         unsafe {
-            self.fallback_allocator.init(ptr::with_exposed_provenance_mut(heap_start), heap_size);
+            self.fallback_allocator.init(ptr::with_exposed_provenance_mut::<u8>(heap_start), heap_size);
         }
     }
 
     /// Allocates using the fallback allocator.
     fn fallback_alloc(&mut self, layout: Layout) -> *mut u8 {
+        //log::debug!("fell back to fallback alloc!");
         match self.fallback_allocator.allocate_first_fit(layout) {
             Ok(ptr) => ptr.as_ptr(),
             Err(_) => ptr::null_mut(),
@@ -56,6 +57,7 @@ unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
                     node as *mut ListNode as *mut u8
                 }
                 None => {
+                    log::debug!("none");
                     let block_size = BLOCK_SIZES[index];
                     let block_align = block_size;
                     match Layout::from_size_align(block_size, block_align) {
